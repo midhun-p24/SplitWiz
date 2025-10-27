@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+
+  // Back-relations
+  receipts Receipt[] @relation("UserReceipts")
+  accounts Account[]
+  sessions Session[]
+
+  createdAt DateTime @default(now())
+  Share     Share[]
+}
+
+model Receipt {
+  id          String        @id @default(cuid())
+  owner       User          @relation("UserReceipts", fields: [ownerId], references: [id])
+  ownerId     String
+  merchant    String?
+  receiptDate DateTime?
+  subtotal    Decimal?      @db.Decimal(10, 2)
+  tax         Decimal?      @db.Decimal(10, 2)
+  tip         Decimal?      @db.Decimal(10, 2)
+  total       Decimal?      @db.Decimal(10, 2)
+  currency    String        @default("USD")
+  status      ReceiptStatus @default(PENDING)
+  items       LineItem[]
+  shares      Share[]
+  createdAt   DateTime      @default(now())
+}
+
+enum ReceiptStatus {
+  PENDING
+  PARSED
+  FINALIZED
+}
+
+model LineItem {
+  id        String  @id @default(cuid())
+  receipt   Receipt @relation(fields: [receiptId], references: [id])
+  receiptId String
+  name      String
+  quantity  Int     @default(1)
+  price     Decimal @db.Decimal(10, 2) // per-item price
+}
+
+model Share {
+  id        String  @id @default(cuid())
+  receipt   Receipt @relation(fields: [receiptId], references: [id])
+  receiptId String
+  user      User    @relation(fields: [userId], references: [id])
+  userId    String
+  amount    Decimal @db.Decimal(10, 2)
+}
+
+/**
+ * =========================
+ * NextAuth models
+ * =========================
+ */
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
